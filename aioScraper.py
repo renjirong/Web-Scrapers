@@ -1,9 +1,8 @@
 # ---------------------------------------------------------------------------------------------------------------------------------------------
-# Code written and updated by 
-# Renji David Ong (TR-PH-INTRN) & Junard Febrer (TR-PH-INTRN)
-# Last Update: 09/09/22 12:27PM
+# Code written and updated by : Renji David Ong (TR-PH-INTRN) 
+# Results Verified by:          Junard Febrer (TR-PH-INTRN)
+# Last Update: 09/10/22 11:32PM
 # ---------------------------------------------------------------------------------------------------------------------------------------------
-import queue
 import requests 
 from bs4 import BeautifulSoup
 import re
@@ -16,8 +15,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.service import Service
 import json
 import multiprocessing 
-import concurrent.futures
-import os
+
 
 
 
@@ -296,7 +294,7 @@ def bn_cyclonisScrape(n, sharedVar, name, lastLink):
     print(f"{name} Started")
     link = "https://www.cyclonis.com/threats/browser-hijacker"
     driver.get(link)
-    time.sleep(3)
+    time.sleep(2)
     dump = driver.find_elements(By.XPATH, "//div[@class='flex']")    
     
     linkList = cyclonisSortByDate(dump)
@@ -318,11 +316,13 @@ def bn_cyclonisScrape(n, sharedVar, name, lastLink):
     while go:
         actualLink = link + str(pageCtr)
         driver.get(actualLink)
+        time.sleep(2)
         dump = driver.find_elements(By.XPATH, "//div[@class='flex']")
         
         linkList = cyclonisSortByDate(dump)
         
         for i in linkList:
+            
             scamLink = verifyLink(i)
             if scamLink:
                 if scamLink == lastLink:
@@ -358,12 +358,13 @@ class bn_howtofixguideDataScraper (threading.Thread):
         link = html.find("div", class_="su-table su-table-alternate su-table-fixed")
         
         data = checkLink(link.table.tr.strong.text)
-        
-        #append gathered data to global list
-        shared_resource_lock.acquire()
-        
-        sharedList.append((self.ctr, data))
-        shared_resource_lock.release()
+        if data:
+            data = data
+            #append gathered data to global list
+            shared_resource_lock.acquire()
+            sharedList.append((self.ctr, data))
+            shared_resource_lock.release()
+            
 def bn_howtofixguideDropLinks(list, lastLink):
     temp = []
     for i in list:
@@ -371,7 +372,7 @@ def bn_howtofixguideDropLinks(list, lastLink):
             temp.append(i[1])
     temp2 = []
     for i in temp:
-        if i == lastLink[1]:
+        if i == lastLink:
             return temp2
         temp2.append(i)
     return temp2
@@ -430,7 +431,7 @@ def bn_howtofixguideScrape(n, sharedVar, name, lastLink):
     else:
         print(f"{name}: {len(sharedList)} New Link(s) from {pageCtr} page(s)")
         
-        sharedVar[n] = [name, nSharedList, nSharedList[0]]
+        sharedVar[n] = [name, nSharedList, nSharedList[0][1]]
 
 def bn_regrunreanimatorScrape(n, sharedVar, name, lastDate):
     global lastLinksJSON
@@ -446,6 +447,7 @@ def bn_regrunreanimatorScrape(n, sharedVar, name, lastDate):
         html = BeautifulSoup(res.text,"lxml")
         list = html.find_all("article")
         nLastDate = list[0].header.div.a["title"]
+        
         for i in list:
             scamLink = i.header.h1.text
             scamDate = i.header.div.a["title"]
@@ -457,8 +459,7 @@ def bn_regrunreanimatorScrape(n, sharedVar, name, lastDate):
                     break
                 else:
                     newLinkList.append([name,scamLink])
-        go=False
-        
+        pageCtr += 1
     if len(newLinkList) == 0:
         print(f"{name}: No new links")
     else:
@@ -712,16 +713,14 @@ def main():
     global global_list
     
     lastLinksJSON = getLastLink()
-    allLinks = []
     manager = multiprocessing.Manager()
     sharedVar = manager.dict()
     ctr = 0
     
-    
-    # thread = multiprocessing.Process(target = bn_computipsScrape, args = (0, sharedVar, "bn_computips", lastLinksJSON["bn_computips"]))
+    # thread = multiprocessing.Process(target = bn_cyclonisScrape, args = (0, sharedVar, "bn_cyclonis", lastLinksJSON["bn_cyclonis"]))
     # thread.start()
     # thread.join()
-    
+
     threads = []
     ctr = 0
     for key in lastLinksJSON:
@@ -736,13 +735,15 @@ def main():
         i.join()
     
     data = sharedVar.values()
-    
+    data.reverse()
     for i in data:
         # print("name: " + i[0])
         # print(f"linkList: {i[1]}")
         # print("lastLink: " + i[2])
-        
         saveToCache(i[0], i[1], i[2])
+        print(i[0])
+        
+        
     saveData()
     
 if __name__ == "__main__":
