@@ -741,9 +741,6 @@ def main():
         # print(f"linkList: {i[1]}")
         # print("lastLink: " + i[2])
         saveToCache(i[0], i[1], i[2])
-        print(i[0])
-        
-        
     saveData()
     
 if __name__ == "__main__":
