@@ -15,7 +15,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.service import Service
 import json
 import multiprocessing 
-
+import os
 
 
 
@@ -35,11 +35,12 @@ lastLinksJSON = {}
 
 def checkLink(String):
     temp = verifyLink(String)
+    blackList = [".txt", ".exe", "@", "e.g.", ".jpg", ".png", ".virus"]
     if temp:
-        if ".exe" not in temp:
-            return verifyLink(String)
-    else:
-        return False
+        for i in blackList:
+            if i in temp.lower():
+                return False
+    return temp
 def verifyLink(string):
     httpsRegEx= r"https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)"
     httpRegEx= r"http?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)"
@@ -67,9 +68,9 @@ def saveData():
         print(e)
         name = str(datetime.datetime.now()).replace(":", "-").split(".")
         name = name[0] + "-" + name[1][:4]
-        name = name.replace("-", "").replace(" ", "") + "out.csv"
+        name = name.replace("-", "").replace(" ", "") + "lastLink.json"
         print("Last Link Retrieved Saved in: " + name + "\n")
-        with open("lastLink.json", "w") as f:
+        with open(name, "w") as f:
             f.write(nLastLink)
             
     try:
@@ -85,31 +86,27 @@ def saveData():
             print("Nothing new to save")
     except Exception as e:
         print(e)
-        
+    
         print("Trying Again...")
         name = str(datetime.datetime.now()).replace(":", "-").split(".")
         name = name[0] + "-" + name[1][:4]
         name = name.replace("-", "").replace(" ", "") + "out.csv"
         
         if len(global_list):
-            with open("out.csv", "w", newline="") as f:
+            with open(name, "w", newline="") as f:
                 writer = csv.writer(f)
                 writer.writerows(global_list)
             print("Saved!")
             print("New File Name: "+name)
         else:
             print("Nothing new to save")
-    except Exception as e:
-        print(e)     
 
 def saveToCache(name, data, nLastLink):
     global global_list
     global lastLinksJSON
-    
-    global_resource_lock.acquire()
     global_list += data
     lastLinksJSON[name] = nLastLink
-    global_resource_lock.release() 
+
     
 def getLastLink():
     try:
@@ -137,7 +134,7 @@ def bn_malwaretipsScrape(n, sharedVar, name, lastLink):
         driver.get(actualLink)
         linkList = driver.find_elements(By.TAG_NAME, "article")
         for i in linkList:
-            scamLink = verifyLink(i.text)
+            scamLink = checkLink(i.text)
             if scamLink:
                 if scamLink == lastLink:
                     lastPage = pageCtr
@@ -167,6 +164,9 @@ def bn_computipsScrape(n, sharedVar, name, lastLink):
         html = BeautifulSoup(htmlDump.text, 'lxml')
         linkTable = html.find_all("h2", class_ = "entry-title")
         pageCtr += 1
+        
+        if len(linkTable) == 0:
+            break
         
         for i in linkTable:
             nLink = checkLink(i.text)
@@ -198,8 +198,11 @@ def bn_pcriskScrape(n, sharedVar, name, lastLink):
         linkTable = html.find_all("div", class_ = "text-article")
         pageCtr += 10
         
+        if len(linkTable) == 0:
+            break
+        
         for i in linkTable:
-            nLink = verifyLink(i.p.text.replace("[.]", "."))
+            nLink = checkLink(i.p.text.replace("[.]", "."))
             
             if nLink == lastLink:
                 lastPage = pageCtr
@@ -228,6 +231,10 @@ def bn_adwareguruScrape(n, sharedVar, name, lastLink):
         html = BeautifulSoup(htmlDump.text, 'lxml')
         linkTable = html.find_all("p", class_ = "post-excerpt")
         pageCtr += 1
+        
+        if len(linkTable) == 0:
+            break
+        
         for i in linkTable:
             nLink = checkLink(i.text)
             if nLink == lastLink:
@@ -256,6 +263,9 @@ def bn_myantispywareScrape(n, sharedVar, name, lastLink):
         linkTable = html.find_all("h3", class_ = "clearfix")
         pageCtr += 1
 
+        if len(linkTable) == 0:
+            break
+        
         for i in linkTable:
             nLink = checkLink(i.a.text)
             if nLink == lastLink:
@@ -300,7 +310,7 @@ def bn_cyclonisScrape(n, sharedVar, name, lastLink):
     linkList = cyclonisSortByDate(dump)
 
     for i in linkList:
-        scamLink = verifyLink(i)
+        scamLink = checkLink(i)
         if scamLink:
             if scamLink == lastLink:
                 lastPage = pageCtr
@@ -323,7 +333,7 @@ def bn_cyclonisScrape(n, sharedVar, name, lastLink):
         
         for i in linkList:
             
-            scamLink = verifyLink(i)
+            scamLink = checkLink(i)
             if scamLink:
                 if scamLink == lastLink:
                     lastPage = pageCtr
@@ -407,6 +417,10 @@ def bn_howtofixguideScrape(n, sharedVar, name, lastLink):
         htmlDump = requests.get(actualLink)
         html = BeautifulSoup(htmlDump.text, 'lxml')
         linkTable = html.find_all("h2", "entry-title")
+        
+        if len(linkTable) == 0:
+            break
+        
         go = bn_howtofixguideProcessPage(linkTable, lastLink)
         pageCtr += 1
         if lastLink in sharedList:
@@ -445,13 +459,16 @@ def bn_regrunreanimatorScrape(n, sharedVar, name, lastDate):
         actualLink = link + str(pageCtr)
         res = requests.get(actualLink)
         html = BeautifulSoup(res.text,"lxml")
-        list = html.find_all("article")
-        nLastDate = list[0].header.div.a["title"]
+        linkTable = html.find_all("article")
+        nLastDate = linkTable[0].header.div.a["title"]
         
-        for i in list:
+        if len(linkTable) == 0:
+            break
+        
+        for i in linkTable:
             scamLink = i.header.h1.text
             scamDate = i.header.div.a["title"]
-            scamLink = verifyLink(scamLink)
+            scamLink = checkLink(scamLink)
             if scamLink:
                 if scamDate == lastDate:
                     lastPage = pageCtr
@@ -479,6 +496,10 @@ def bn_malwareguideScrape(n, sharedVar, name, lastLink):
         htmlDump = requests.get(actualLink)
         html = BeautifulSoup(htmlDump.text, 'lxml')
         linkTable = html.find_all("h2", "entry-title")
+        
+        if len(linkTable) == 0:
+            break
+            
         for i in linkTable:
             nLink = checkLink(i.a.text)
             if nLink == lastLink:
@@ -509,6 +530,9 @@ def bn_howtomalwareScrape(n, sharedVar, name, lastLink):
         linkTable = html.find_all("a", "frontlist")
         pageCtr += 1
         
+        if len(linkTable) == 0:
+            break
+        
         for i in linkTable:
             nLink = checkLink(i.text)
             if nLink == lastLink:
@@ -534,23 +558,32 @@ def bn_2spywareScrape(n, sharedVar, name, lastLink):
     htmlDump = requests.get(link)
     html = BeautifulSoup(htmlDump.text, 'lxml')
     linkTable = html.find_all("div", "post news_post_3 news_post_3_bullet")
-    for i in linkTable: 
-        nLink = checkLink(i.h2.a.text)
-        if nLink == lastLink:
-            lastPage = pageCtr
-            go = False
-            break
-        if nLink:
-            linkList.append((name, nLink))
-    pageCtr+=1
-    page = "/page/"
-    nLink = False
+    
+    if len(linkTable) != 0:
+        for i in linkTable: 
+            nLink = checkLink(i.h2.a.text)
+            if nLink == lastLink:
+                lastPage = pageCtr
+                go = False
+                break
+            if nLink:
+                linkList.append((name, nLink))
+        pageCtr+=1
+        page = "/page/"
+        nLink = False
+    else:
+        go = False
+        
+        
     while go:
         actualLink = link + page + str(pageCtr)
         htmlDump = requests.get(actualLink)
         html = BeautifulSoup(htmlDump.text, 'lxml')
         linkTable = html.find("div", {'class':'news-list-common'})
         linkTable = linkTable.find_all('h2')
+        
+        if len(linkTable) == 0:
+            break
         
         for i in linkTable:
             nLink = checkLink(i.a.text)
@@ -585,7 +618,8 @@ def bn_greatisScrape(n, sharedVar, name, lastLink):
         driver.get(actualLink)
         linkList = driver.find_elements(By.XPATH, "//div[@class='card-content']/div/header/h3/a")
         for i in linkList:
-            scamLink = verifyLink(i.text)
+            scamLink = checkLink(i.text)
+            
             if scamLink:
                 if scamLink == lastLink:
                     lastPage = pageCtr
@@ -598,7 +632,8 @@ def bn_greatisScrape(n, sharedVar, name, lastLink):
         print(f"{name}: No new links")
     else:
         print(f"{name}: {len(newLinkList)} New Link(s) from {lastPage} page(s)")
-        sharedVar[n] = [name, linkList, linkList[0][1]]
+        
+        # sharedVar[n] = [name, linkList, linkList[0][1]]
 
 def bn_trojankillerScrape(n, sharedVar, name, lastLink):
     global lastLinksJSON
@@ -612,17 +647,21 @@ def bn_trojankillerScrape(n, sharedVar, name, lastLink):
         actualLink = link + str(pageCtr)
         htmlDump = requests.get(actualLink)
         html = BeautifulSoup(htmlDump.text, 'lxml')
-        linkTable = html.find_all("h2", {'class':'post-box-title'})
+        linkTable = html.find_all("span", {'class':'screen-reader-text'})
+        
+        if len(linkTable) == 0:
+            break
         
         pageCtr += 1
         for i in linkTable:
-            nLink = checkLink(i.a.text)
+            nLink = checkLink(i.text)
             if nLink == lastLink:
                 lastPage = pageCtr
                 go = False
                 break
             if nLink and nLink not in linkList:
                 linkList.append([name,nLink])
+                
     if not linkList:
             print(f"{name}: No new links")
     else:
@@ -643,6 +682,10 @@ def bn_virusremovalinfoScrape (n, sharedVar, name, lastLink):
         htmlDump = requests.get(actualLink)
         html = BeautifulSoup(htmlDump.text, 'lxml')
         linkTable = html.find_all("h2", {'class':'post-title'})
+        
+        if len(linkTable) == 0:
+            break
+            
         pageCtr += 1
         for i in linkTable:
             nLink = checkLink(i.a.text)
@@ -665,14 +708,19 @@ def bn_cleanupallthreatsScrape(n, sharedVar, name, lastLink):
     go = True
     link = "https://cleanupallthreats.com/page/"
     nLink = False
-    html = requests.get(link)
+    
     print(f"{name} Started")
     while go:
+        
         actualLink = link + str(pageCtr)
         htmlDump = requests.get(actualLink)
         html = BeautifulSoup(htmlDump.text, "lxml")
         linkTable = html.find_all("div", "entry-content")
         pageCtr += 1
+        
+        if len(linkTable) == 0:
+            break
+            
         for i in linkTable:
             nLink = checkLink(i.h2.a.text)
             if nLink == lastLink:
@@ -699,7 +747,7 @@ funcList = [        bn_malwaretipsScrape,
                     bn_howtofixguideScrape, 
                     bn_regrunreanimatorScrape, 
                     bn_malwareguideScrape, 
-                    #bn_howtomalwareScrape, 
+                    bn_howtomalwareScrape, 
                     bn_2spywareScrape,
                     bn_greatisScrape,
                     bn_trojankillerScrape,
@@ -707,6 +755,8 @@ funcList = [        bn_malwaretipsScrape,
                     bn_cleanupallthreatsScrape
                 ]
 
+def sortData (data):
+    pass
 
 def main():
     global lastLinksJSON
@@ -716,8 +766,8 @@ def main():
     manager = multiprocessing.Manager()
     sharedVar = manager.dict()
     ctr = 0
-    
-    # thread = multiprocessing.Process(target = bn_cyclonisScrape, args = (0, sharedVar, "bn_cyclonis", lastLinksJSON["bn_cyclonis"]))
+    # print(lastLinksJSON["bn_pcrisk"])
+    # thread = multiprocessing.Process(target = bn_pcriskScrape, args = (0, sharedVar, "bn_pcrisk", lastLinksJSON["bn_pcrisk"]))
     # thread.start()
     # thread.join()
 
@@ -736,12 +786,53 @@ def main():
     
     data = sharedVar.values()
     data.reverse()
+    sourceList = [ "bn_malwaretips",		
+                    "bn_computips",		
+                    "bn_pcrisk",			
+                    "bn_adwareguru",		
+                    "bn_myantispyware",	
+                    "bn_cyclonis",			
+                    "bn_howtofixguide",	
+                    "bn_regrunreanimator",	
+                    "bn_malwareguide",		
+                    "bn_howtomalware",		
+                    "bn_2spyware",
+                    "bn_greatis",			
+                    "bn_trojankiller",			
+                    "bn_virusremovalinfo",	
+                    "bn_cleanupallthreats"]
+    
+    dataDict = {
+        
+    }
+    
+    memory = []
+    
     for i in data:
+        
+        dataDict.update({i[0] : [i[1], i[2]]})
+        memory.append(i[0])
         # print("name: " + i[0])
         # print(f"linkList: {i[1]}")
         # print("lastLink: " + i[2])
-        saveToCache(i[0], i[1], i[2])
+    print("\n")
+    for i in sourceList:
+        try:
+            saveToCache(i, dataDict[i][0], dataDict[i][1])
+        except:
+            print(f"No new links from {i}")
+            pass
+    print("\n")
     saveData()
+    
+    print(f"\nTotal Links: {len(global_list)}")
+    if os.path.exists("linksCountHistory.csv"):
+        with open("linksCountHistory.csv", "a") as f:
+            f.write(f"{datetime.date.today()}, {len(global_list)}\n")
+    else:
+        with open("linksCountHistory.csv", "w") as f:
+            f.write(f"{datetime.date.today()}, Link(s): {len(global_list)} (Unfiltered)\n")
+    
     
 if __name__ == "__main__":
     start = time.time()
